@@ -23,9 +23,8 @@ logregworkflow <- workflow() |>
   fit(data = amazontrain)
 
 # Make predictions
-logpreds <- predict(logregworkflow,
-                    new_data = amazontest,
-                    type = "prob") # Output predictions
+logpreds <- logregworkflow |>
+  predict(new_data = amazontest, type = "prob") # Output predictions
 
 # Prep for Kaggle submission
 kaggle_sub <- logpreds %>%
