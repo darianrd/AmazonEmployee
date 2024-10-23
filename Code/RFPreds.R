@@ -9,8 +9,8 @@ amazontrain$ACTION <- factor(amazontrain$ACTION) # Make ACTION (response) a fact
 # Create recipe
 amazon_recipe <- recipe(ACTION ~ ., data = amazontrain) |> 
   step_mutate_at(all_numeric_predictors(), fn = factor) |> # Turn all numeric features into factors
-  step_other(all_nominal_predictors(), threshold = 0.001) |> # Combine categorical values that occur 0.1% of the time
-  step_dummy(all_nominal_predictors()) # Create dummy variables
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) |> # Target encoding
+  step_normalize(all_numeric_predictors()) # Make mean = 0, SD = 1
 
 # Create random forest model
 rf_mod <- rand_forest(mtry = tune(),
