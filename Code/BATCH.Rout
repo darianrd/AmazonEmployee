@@ -1,0 +1,147 @@
+
+R version 4.3.3 (2024-02-29) -- "Angel Food Cake"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> library(tidymodels)
+── Attaching packages ────────────────────────────────────── tidymodels 1.2.0 ──
+✔ broom        1.0.7     ✔ recipes      1.1.0
+✔ dials        1.3.0     ✔ rsample      1.2.1
+✔ dplyr        1.1.4     ✔ tibble       3.2.1
+✔ ggplot2      3.5.1     ✔ tidyr        1.3.1
+✔ infer        1.0.7     ✔ tune         1.2.1
+✔ modeldata    1.4.0     ✔ workflows    1.1.4
+✔ parsnip      1.2.1     ✔ workflowsets 1.1.0
+✔ purrr        1.0.2     ✔ yardstick    1.3.1
+── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
+✖ purrr::discard() masks scales::discard()
+✖ dplyr::filter()  masks stats::filter()
+✖ dplyr::lag()     masks stats::lag()
+✖ recipes::step()  masks stats::step()
+• Use suppressPackageStartupMessages() to eliminate package startup messages
+> library(vroom)
+
+Attaching package: ‘vroom’
+
+The following object is masked from ‘package:yardstick’:
+
+    spec
+
+The following object is masked from ‘package:scales’:
+
+    col_factor
+
+> 
+> amazontrain <- vroom("train.csv")
+Rows: 32769 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): ACTION, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTN...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> amazontest <- vroom("test.csv")
+Rows: 58921 Columns: 10
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (10): id, RESOURCE, MGR_ID, ROLE_ROLLUP_1, ROLE_ROLLUP_2, ROLE_DEPTNAME,...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> 
+> amazontrain$ACTION <- factor(amazontrain$ACTION) # Make ACTION (response) a factor
+> 
+> # Create recipe
+> amazon_recipe <- recipe(ACTION ~ ., data = amazontrain) |> 
++   step_mutate_at(all_numeric_predictors(), fn = factor) |> # Turn all numeric features into factors
++   step_other(all_nominal_predictors(), threshold = 0.001) |> # Combine categorical values that occur 0.1% of the time
++   step_dummy(all_nominal_predictors()) # Create dummy variables
+> 
+> # Create logistic regression model
+> logregmod <- logistic_reg() |> # Type of model
++   set_engine("glm") # Fit generalized linear model
+> 
+> # Create workflow
+> logregworkflow <- workflow() |> 
++   add_model(logregmod) |> 
++   add_recipe(amazon_recipe) |> 
++   fit(data = amazontrain)
+Warning message:
+glm.fit: fitted probabilities numerically 0 or 1 occurred 
+> 
+> # Make predictions
+> logpreds <- logregworkflow |>
++   predict(new_data = amazontest, type = "prob") # Output predictions
+> 
+> # Prep for Kaggle submission
+> kaggle_sub <- logpreds %>%
++   bind_cols(., amazontest) |> # Bind predictions to test data
++   rename(ACTION = .pred_1) |> # Rename .pred_1 to ACTION for Kaggle submission
++   select(id, ACTION) # Keep id and ACTION variables
+> 
+> # Write out file
+> vroom_write(x = kaggle_sub, file = "./LogPreds.csv", delim = ",")
+> 
+> # Create penalized logistic model
+> penlog_mod <- logistic_reg(mixture = tune(),
++                            penalty = tune()) |> # Type of model
++   set_engine("glmnet")
+> 
+> # Create workflow
+> penlog_workflow <- workflow() |> 
++   add_recipe(amazon_recipe) |> 
++   add_model(penlog_mod)
+> 
+> # Grid of values to tune over
+> tuning_grid <- grid_regular(penalty(),
++                             mixture(),
++                             levels = 5)
+> 
+> # Split data for CV
+> folds <- vfold_cv(amazontrain, v = 5, repeats = 1)
+> 
+> # Run CV
+> CV_results <- penlog_workflow |> 
++   tune_grid(resamples = folds,
++             grid = tuning_grid,
++             metrics = metric_set(roc_auc))
+> 
+> # Find best tuning parameters
+> best_tune <- CV_results |> 
++   select_best(metric = "roc_auc")
+> 
+> # Finalize workflow and fit
+> final_workflow <- penlog_workflow |> 
++   finalize_workflow(best_tune) |> 
++   fit(data = amazontrain)
+> 
+> # Make predictions
+> penlog_preds <- final_workflow |>
++   predict(new_data = amazontest, type = "prob")
+> 
+> # Prep for Kaggle submission
+> kaggle_sub <- penlog_preds %>%
++   bind_cols(., amazontest) |> # Bind predictions to test data
++   rename(ACTION = .pred_1) |> # Rename .pred_1 to ACTION for Kaggle submission
++   select(id, ACTION) # Keep id and ACTION variables
+> 
+> # Write out file
+> vroom_write(x = kaggle_sub, file = "./PenLogPreds.csv", delim = ",")
+> 
+> proc.time()
+    user   system  elapsed 
+2749.910   24.767 2775.157 
