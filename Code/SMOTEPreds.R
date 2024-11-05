@@ -1,4 +1,5 @@
 library(tidymodels)
+library(themis)
 library(vroom)
 library(discrim)
 library(embed)
@@ -9,12 +10,16 @@ amazontest <- vroom("test.csv")
 
 amazontrain$ACTION <- factor(amazontrain$ACTION) # Make ACTION (response) a factor
 
-# Create recipe
 amazon_recipe <- recipe(ACTION ~ ., data = amazontrain) |> 
-  step_mutate_at(all_numeric_predictors(), fn = factor) |> # Turn all numeric features into factors
-  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) |> # Target encoding
-  step_normalize(all_predictors()) |> 
-  step_pca(all_predictors(), threshold = 0.8)
+  step_mutate_at(all_numeric_predictors(), fn = factor) |> 
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) |> 
+  step_smote(all_outcomes(), neighbors = 5) |> 
+  step_downsample()
+
+prepped_recipe <- prep(amazon_recipe)
+baked_recipe <- bake(prepped_recipe, new_data = amazontrain)
+
+
 
 ## Logistic Regression
 
@@ -39,7 +44,9 @@ kaggle_sub <- logpreds %>%
   select(id, ACTION) # Keep id and ACTION variables
 
 # Write out file
-vroom_write(x = kaggle_sub, file = "./PCALogPreds.csv", delim = ",")
+vroom_write(x = kaggle_sub, file = "./SMOTELogPreds.csv", delim = ",")
+
+
 
 ## Penalized Logistic Regression
 
@@ -87,7 +94,9 @@ kaggle_sub <- penlog_preds %>%
   select(id, ACTION) # Keep id and ACTION variables
 
 # Write out file
-vroom_write(x = kaggle_sub, file = "./PCAPenLogPreds.csv", delim = ",")
+vroom_write(x = kaggle_sub, file = "./SMOTEPenLogPreds.csv", delim = ",")
+
+
 
 ## Random Forest
 
@@ -137,7 +146,9 @@ kaggle_sub <- rf_preds %>%
   select(id, ACTION) # Keep id and ACTION variables
 
 # Write out file
-vroom_write(x = kaggle_sub, file = "./PCARFPreds.csv", delim = ",")
+vroom_write(x = kaggle_sub, file = "./SMOTERFPreds.csv", delim = ",")
+
+
 
 ## K-Nearest Neighbors
 
@@ -184,7 +195,9 @@ kaggle_sub <- knn_preds %>%
   select(id, ACTION) # Keep id and ACTION variables
 
 # Write out file
-vroom_write(x = kaggle_sub, file = "./PCAKNNPreds.csv", delim = ",")
+vroom_write(x = kaggle_sub, file = "./SMOTEKNNPreds.csv", delim = ",")
+
+
 
 ## Naive Bayes
 
@@ -233,4 +246,4 @@ kaggle_sub <- nb_preds %>%
   select(id, ACTION) # Keep id and ACTION variables
 
 # Write out file
-vroom_write(x = kaggle_sub, file = "./PCANBPreds.csv", delim = ",")
+vroom_write(x = kaggle_sub, file = "./SMOTENBPreds.csv", delim = ",")

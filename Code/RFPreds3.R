@@ -1,5 +1,6 @@
 library(tidymodels)
 library(vroom)
+library(embed)
 
 amazontrain <- vroom("train.csv")
 amazontest <- vroom("test.csv")
@@ -58,4 +59,4 @@ kaggle_sub <- rf_preds %>%
   select(id, ACTION) # Keep id and ACTION variables
 
 # Write out file
-vroom_write(x = kaggle_sub, file = "./RFPreds.csv", delim = ",")
+vroom_write(x = kaggle_sub, file = "./RFPreds3.csv", delim = ",")
